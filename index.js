@@ -64,6 +64,12 @@ app.post('/inscr/add/',urlEncodedParser,function(req,res){
 })
 
 
+
+app.post('/event/',urlEncodedParser,function(req,res){
+	//TODO: TOUS LES EVENTS
+})
+
+
 app.post('/event/add/',urlEncodedParser,function(req,res){
 	res.send('ajout de l event '+ req.body.nom)
 	lesEvents.push({
@@ -84,13 +90,16 @@ app.listen(PORT, function () {
   console.log('Example app listening on port ' + PORT)
 })
 
+//a check
 function getEventsByUser(unUser)
 {
-	const lesEventUser = []
-	for(unEvent of lesEvents)
-	{
-		//TODO
+	const lesEventsUser = []
+	for(unEvent in lesEvents){
+		if(unEvent.user == unUser){
+			lesEventsUser.push(unEvent)
+		}
 	}
+	return lesEventsUser
 }
 
 
