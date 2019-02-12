@@ -6,20 +6,23 @@ const urlEncodedParser = bodyParser.urlencoded({ extended: false })
 const lesEvents = [
 		{
   			nomEvent: "Sortie Half-Life 3",
-  			dateDebut: 2,
-  			dateFin: 3,
+  			dateDebut: new Date('25/08/1998').valueOf(),
+  			dateFin: new Date('26/08/1998').valueOf(),
+			descrEvent:"[....] -Gordon Freeman",
   			user: "bg"
   		},
   		{
   			nomEvent: "Suppression de Yasuo",
-  			dateDebut: 2,
-  			dateFin: 3,
+  			dateDebut: new Date('02/02/1978').valueOf(),
+  			dateFin: new Date('03/02/1978').valueOf(),
+            descrEvent:"ASAGI, IL MET DES TONGUES",
   			user: "MangerDodo"
   		},
   		{
   			nomEvent: "Yannick adore le Java",
-  			dateDebut: 2,
-  			dateFin: 3,
+  			dateDebut: new Date ('26/04/1995').valueOf(),
+  			dateFin: new Date ('26/04/2095').valueOf(),
+            descrEvent:"I fap on java every weeks",
   			user: "YannickSushi"
   		}
 ];
@@ -49,6 +52,12 @@ app.get('/', function (req, res) {
   res.send('Bienvenue sur le calendrier')
 })
 
+app.get('/test', function (req, res) {
+    var laDate = new Date('01/01/1999')
+    var timeStampSecond = Math.floor(laDate / 1000);
+    res.send(lesInscrits)
+})
+
 app.get('/inscription',function(req,res){
 	res.send('page d inscription')
 })
@@ -65,41 +74,54 @@ app.post('/inscr/add/',urlEncodedParser,function(req,res){
 
 
 
-app.post('/event/',urlEncodedParser,function(req,res){
-	//TODO: TOUS LES EVENTS
+app.post('/events/',urlEncodedParser,function(req,res){
+	res.json(getEventsByUser(req.body.user))
 })
 
 
 app.post('/event/add/',urlEncodedParser,function(req,res){
-	res.send('ajout de l event '+ req.body.nom)
+	res.send('ajout de l event '+ req.body.nomEvent)
 	lesEvents.push({
 			nomEvent: req.body.nomEvent,
-  			dateDebut: req.body.dateDebut,
-  			dateFin: req.body.dateFin,
+  			dateDebut: new Date(req.body.dateDebut).valueOf(),
+  			dateFin: new Date(req.body.dateFin).valueOf(),
+        	descrEvent:req.body.descrEvent,
   			user: req.body.user
 	})
 
 	console.log(lesEvents)
 })
 
-app.post('/event/find/',urlEncodedParser,function(req,res){
-		
+app.post('/events/find/',urlEncodedParser,function(req,res){
+    res.json(getEventByName(req.body.user,req.body.eventName))
 })
 
 app.listen(PORT, function () {
   console.log('Example app listening on port ' + PORT)
 })
 
-//a check
+
 function getEventsByUser(unUser)
 {
 	const lesEventsUser = []
-	for(unEvent in lesEvents){
+	for(unEvent of lesEvents){
 		if(unEvent.user == unUser){
 			lesEventsUser.push(unEvent)
 		}
 	}
 	return lesEventsUser
+}
+
+function getEventByName(unUser,nameEvent)
+{
+	const lesEventsUser = getEventsByUser(unUser)
+	const selectedEvents = []
+	for(unEvent of lesEventsUser)
+	{
+		if(unEvent.nomEvent == nameEvent)
+			selectedEvents.push(unEvent)
+	}
+	return selectedEvents
 }
 
 
