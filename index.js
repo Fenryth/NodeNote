@@ -1,128 +1,202 @@
+//instanciation de l'API
 const express = require('express')
 const app = express()
 const PORT = process.env.PORT || 5000
 const bodyParser = require('body-parser')
 const urlEncodedParser = bodyParser.urlencoded({ extended: false })
-const lesEvents = [
-		{
-  			nomEvent: "Sortie Half-Life 3",
-  			dateDebut: new Date('25/08/1998').valueOf(),
-  			dateFin: new Date('26/08/1998').valueOf(),
-			descrEvent:"[....] -Gordon Freeman",
-  			user: "bg"
-  		},
-  		{
-  			nomEvent: "Suppression de Yasuo",
-  			dateDebut: new Date('02/02/1978').valueOf(),
-  			dateFin: new Date('03/02/1978').valueOf(),
-            descrEvent:"ASAGI, IL MET DES TONGUES",
-  			user: "MangerDodo"
-  		},
-  		{
-  			nomEvent: "Yannick adore le Java",
-  			dateDebut: new Date ('26/04/1995').valueOf(),
-  			dateFin: new Date ('26/04/2095').valueOf(),
-            descrEvent:"I fap on java every weeks",
-  			user: "YannickSushi"
-  		}
-];
-const lesInscrits = [
-	{
-		nomInscr: "Herrero",
-		prenomInscr: "Yannick",
-		identifiant:"YannickSushi",
-		pswInscr: "ILoveJava"
-	},
-	{
-		nomInscr: "Phun-Vong",
-		prenomInscr: "Morgane",
-		identifiant:"MangerDodo",
-		pswInscr: "coucou"
-	},
-	{
-		nomInscr: "jvhouèmeuthousseux",
-		prenomInscr: "Benjamin",
-		identifiant: "bg",
-		pswInscr: "miaou"
-	}
-];
+const cors = require('cors')
+
+//instanciation de JWT
+const jwt = require('jsonwebtoken')
+const passport = require('passport')
+const passportJWT = require('passport-jwt')
+const JwtStrategy = passportJWT.Strategy
+const ExtractJwt = passportJWT.ExtractJwt;
+const secret = 'ofMana'
+const jwtOptions = {
+    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    secretOrKey: secret
+}
+const jwtStrategy = new JwtStrategy(jwtOptions, function(payload, next) {
+    const user = getUserByIdentifiant(payload.user.identifiant)
+    if (user) {
+        next(null, user)
+    } else {
+        next(null, false)
+    }
+})
+passport.use(jwtStrategy)
 
 
-app.get('/', function (req, res) {
-  res.send('Bienvenue sur le calendrier')
+app.use(cors({credentials: true, origin: true}))
+app.use(bodyParser.json())
+app.options('*',cors())
+
+//Création des variables d'import
+var requireEvent = require('./src/events')
+var requireInsrit = require('./src/accounts')
+
+
+//Récupération des données
+var lesEvents = requireEvent.getLesEvents()
+var lesInscrits = requireInsrit.getInscrits()
+
+//Création des routes
+
+app.get('/events/',passport.authenticate('jwt',{session: false}), function (req, res) {
+    let token = req.headers.authorization.split(' ')[1]
+    let decoded = jwt.verify(token,secret)
+    let eventsByUser = trierListEvent().filter((unEvent)=>{
+        return unEvent.user === decoded.user.identifiant
+    })
+    res.send(eventsByUser)
 })
 
-app.get('/test', function (req, res) {
-    var laDate = new Date('01/01/1999')
-    var timeStampSecond = Math.floor(laDate / 1000);
-    res.send(lesInscrits)
+app.post('/events/',passport.authenticate('jwt',{session: false}),urlEncodedParser,function(req,res){
+    let token = req.headers.authorization.split(' ')[1]
+    let decoded = jwt.verify(token,secret)
+    const newEvent = {
+        idEvent:getNextIDEvent(),
+        nomEvent: req.body.nomEvent,
+        dateDebut: new Date(req.body.dateDebut).toUTCString(),
+        dateFin: new Date(req.body.dateFin).toUTCString(),
+        descrEvent:req.body.descrEvent,
+        user: decoded.user.identifiant
+    }
+    lesEvents.push(newEvent)
+    res.status(201).json({newEvent: newEvent})
 })
 
-app.get('/inscription',function(req,res){
-	res.send('page d inscription')
-})
-
-app.post('/inscr/add/',urlEncodedParser,function(req,res){
-	res.send('ajout de l inscrit '+ req.body.nomInscr)
-	lesInscrits.push({
-		nomInscr: req.body.nomInscr,
-		prenomInscr: req.body.prenomInscr,
-		identifiant:req.body.identifiant,
-		pswInscr: req.body.pswInscr
-	})
-})
-
-
-
-app.post('/events/',urlEncodedParser,function(req,res){
-	res.json(getEventsByUser(req.body.user))
+app.delete('/events/:id',passport.authenticate('jwt',{session: false}),urlEncodedParser,function(req,res){
+    let token = req.headers.authorization.split(' ')[1]
+    let decoded = jwt.verify(token,secret)
+    if( getEventById(+req.params.id).user === decoded.user.identifiant )
+    {
+        lesEvents = lesEvents.filter((currentEvent)=> currentEvent.idEvent !== +req.params.id)
+        let eventsByUser = trierListEvent().filter((unEvent)=>{
+            return unEvent.user === decoded.user.identifiant
+        })
+        res.status(200).json({ listEvent: eventsByUser})
+    }
+    else{
+        res.status(403).json({error:"Vous n'avez pas le droit de gerer cette ressource"})
+    }
 })
 
 
-app.post('/event/add/',urlEncodedParser,function(req,res){
-	res.send('ajout de l event '+ req.body.nomEvent)
-	lesEvents.push({
-			nomEvent: req.body.nomEvent,
-  			dateDebut: new Date(req.body.dateDebut).valueOf(),
-  			dateFin: new Date(req.body.dateFin).valueOf(),
-        	descrEvent:req.body.descrEvent,
-  			user: req.body.user
-	})
+app.post('/inscr/',urlEncodedParser,function(req,res){
+    if(!getUserByCredential(req.body.identifiant,req.body.pswInscr))
+    {
+        res.send('ajout de l inscrit '+ req.body.nomInscr)
+        lesInscrits.push({
+            idInscr: getNextIDInscrt(),
+            nomInscr: req.body.nomInscrit,
+            prenomInscr: req.body.prenomInscr,
+            identifiant:req.body.identifiant,
+            pswInscr: req.body.pswInscr
+        })
+    }
+    else
+    {
+        res.status(403).json({newEvent: "La personne existe déjà"})
+    }
 
-	console.log(lesEvents)
 })
 
-app.post('/events/find/',urlEncodedParser,function(req,res){
-    res.json(getEventByName(req.body.user,req.body.eventName))
+
+app.get('/events/:id',passport.authenticate('jwt',{session: false}),urlEncodedParser,function(req,res){
+    let token = req.headers.authorization.split(' ')[1]
+    let decoded = jwt.verify(token,secret)
+    let leEvent = getEventById(+req.params.id)
+    if(leEvent)
+    {
+        if( leEvent.user === decoded.user.identifiant )
+            res.json(leEvent)
+        else
+            res.status(403).json({error:"Vous n'avez pas le droit de gerer cette ressource"})
+    }
+    res.status(404).json({ error: 'Evenement non trouvé'})
+
 })
+
+
+app.post('/login',function(req,res) {
+    let leUser = getUserByCredential(req.body.user,req.body.pswInscr)
+    if (!leUser) {
+        return  res.status(401).json({ error: 'Combinaison identifiant/mdp non valide'})
+    }
+    else
+    {
+        let userLessMdP = {
+            ...leUser,
+        }
+        delete userLessMdP.pswInscr
+        const userJwt = jwt.sign({ user: userLessMdP }, secret)
+        res.status(200).json( {token:userJwt})
+    }
+})
+
 
 app.listen(PORT, function () {
   console.log('Example app listening on port ' + PORT)
 })
 
-
-function getEventsByUser(unUser)
+function getEventById(unIdEvent)
 {
-	const lesEventsUser = []
-	for(unEvent of lesEvents){
-		if(unEvent.user == unUser){
-			lesEventsUser.push(unEvent)
-		}
-	}
-	return lesEventsUser
-}
-
-function getEventByName(unUser,nameEvent)
-{
-	const lesEventsUser = getEventsByUser(unUser)
-	const selectedEvents = []
-	for(unEvent of lesEventsUser)
-	{
-		if(unEvent.nomEvent == nameEvent)
-			selectedEvents.push(unEvent)
-	}
-	return selectedEvents
+    return lesEvents.find((event) => event.idEvent === unIdEvent)
 }
 
 
-//middleware express cors (recup et app.use cors)
+function getUserByCredential(unIdentifiant,unMdp)
+{
+    let laPersonne = null
+    for(unInscr of lesInscrits)
+    {
+        if(unInscr.identifiant == unIdentifiant && unInscr.pswInscr == unMdp)
+        {
+            laPersonne = unInscr
+            break
+        }
+    }
+    return laPersonne
+}
+
+function getNextIDEvent()
+{
+    let lesEventsTriee = [ ...lesEvents].sort((prev,next)=>{
+        return prev.idEvent > next.idEvent
+    })
+
+    return lesEventsTriee[lesEventsTriee.length-1].idEvent +1
+}
+
+function getNextIDInscrt()
+{
+    let lesInscrTriee = [ ...lesInscrits].sort((prev,next)=>{
+        return prev.idInscr > next.idInscr
+    })
+
+    return lesInscrTriee[lesInscrTriee.length-1].idEvent +1
+}
+
+function trierListEvent()
+{
+    return [ ...lesEvents].sort((prev,next)=>{
+        return new Date(prev.dateDebut) > new Date(next.dateDebut)
+    })
+}
+
+function getUserByIdentifiant(unIdentifiant){
+
+    let laPersonne = null
+    for(unInscr of lesInscrits)
+    {
+        if(unInscr.identifiant == unIdentifiant)
+        {
+            laPersonne = unInscr
+            break
+        }
+    }
+
+    return laPersonne
+}
